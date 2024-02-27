@@ -23,6 +23,11 @@ from tqdm import tqdm
 import json
 import numpy as np
 
+# LADy_eval
+import pytrec_eval
+import pandas as pd
+from nltk.corpus import stopwords
+
 from torch import nn
 from torch.nn.functional import normalize
 import torch
@@ -397,21 +402,92 @@ def evaluate(data_loader, model, sents, task):
     model.model.eval()
 
     outputs, targets = [], []
+    sorted_output_list = []
     for batch in tqdm(data_loader):
 
-        outs = model.model.generate(input_ids=batch['source_ids'].to(device), 
-                                    attention_mask=batch['source_mask'].to(device), 
+        outs = model.model.generate(input_ids=batch['source_ids'].to(device),
+                                    attention_mask=batch['source_mask'].to(device),
                                     max_length=args.max_seq_length*2,
-                                    num_beams=args.num_beams)
+                                    num_beams=args.num_beams,
+                                    output_scores=True,
+                                    return_dict_in_generate=True)
 
-        dec = [tokenizer.decode(ids, skip_special_tokens=True) for ids in outs]
+        token_ids = outs.sequences if hasattr(outs, 'sequences') else outs
+        dec = [tokenizer.decode(ids, skip_special_tokens=True) for ids in token_ids]
+        # dec = [tokenizer.decode(ids, skip_special_tokens=True) for ids in outs]
         target = [tokenizer.decode(ids, skip_special_tokens=True) for ids in batch["target_ids"]]
+        #
+        # print("dec", dec)
+        from torch.nn.functional import softmax
+        token_probs = {}
+        for i, score in enumerate(outs.scores):
+            probabilities = softmax(score, dim=-1)
+            top_k = 10
+            top_probs, top_ids = torch.topk(probabilities, top_k)
+            for prob, token_id in zip(top_probs[0], top_ids[0]):
+                token_probs[token_id.item()] = prob.item()
 
+        top_tokens = sorted(token_probs.items(), key=lambda x: x[1], reverse=True)
+        top_words = [(tokenizer.decode([token_id], skip_special_tokens=True), prob) for token_id, prob in top_tokens]
+
+        set_of_words = set()
+        sorted_output = []
+        stop_words = set(stopwords.words('english'))
+        for word, prob in top_words:
+            word = word.lower()
+            if word not in stop_words and word.isalpha()\
+                    and len(word) > 2\
+                    and word not in ['positive', 'negative', 'neutral']\
+                    and word not in set_of_words:
+                set_of_words.add(word)
+                sorted_output.append((word, prob))
+
+        # print("sorted_output", sorted_output)
+
+        # sorted_output = [ [(w1, p1), (w2, p2)], []] and sorted_output_list = [ [(w1, p1), (w2, p2)], [], [], []]
         outputs.extend(dec)
         targets.extend(target)
 
+        # for now, we have only one in sorted_output
+        sorted_output_list.extend([sorted_output])
+
     scores, all_labels, all_preds = compute_scores(outputs, targets, task, False)
     results = {'labels_correct': all_labels, 'labels_pred': all_preds, 'output_pred': outputs, 'output_correct': targets, 'utterances': sents}
+
+    qrel = dict()
+    run = dict()
+
+    for i, words in enumerate(all_labels):
+        # [[('a', 'barack obama') ('a', 'hillary clinton') ()], []]
+        words_list_list = [word_tuple[1].split() for word_tuple in words]
+        words_list = [item for sublist in words_list_list for item in sublist]
+        q_key = 'q{}'.format(i)
+        # qrel[q_key] = {word: 1}
+        qrel[q_key] = {w: 1 for w in words_list}
+
+    # adding the best prediction at the first
+    new_sorted_output_list = []
+    for i, sublist in enumerate(sorted_output_list):
+        for ap in all_preds[i]:
+            sublist[:0] = [(w, 1.000) for w in ap[1].split()]
+        sublist_unique = []
+        sublist_unique_set = set()
+        for s in sublist:
+            if s[0] not in sublist_unique_set:
+                sublist_unique.append(s)
+                sublist_unique_set.add(s[0])
+        new_sorted_output_list.append(sublist_unique)
+
+    # print("new_sorted_output_list", new_sorted_output_list)
+    for i, sublist in enumerate(new_sorted_output_list):
+        q_key = 'q{}'.format(i)
+        run[q_key] = {}
+        for j, (word, _) in enumerate(sublist):
+            run[q_key][word] = len(sublist) - j
+
+    print("qrel", qrel)
+    print("run", run)
+
     ex_list = []
 
     for idx in range(len(all_preds)):
@@ -419,8 +495,25 @@ def evaluate(data_loader, model, sents, task):
         for key in results:
             new_dict[key] = results[key][idx]
         ex_list.append(new_dict)
-    
+
     results = {'performance_metrics': scores, 'examples': ex_list}
+
+    # LADy_eval
+    metrics = ['P', 'recall', 'ndcg_cut', 'map_cut', 'success']
+    topkstr = '1,5,10,100'
+    metrics_set = set()
+    for m in metrics:
+        metrics_set.add(f'{m}_{topkstr}')
+
+    mean_list = [pd.DataFrame() for i in range(0, 11)]
+
+    f = 0
+    h_ratio = 0
+    print(f'pytrec_eval for {metrics_set} for fold {f} with {h_ratio * 10} percent hidden aspect in dataset {dataset}...')
+    df = pd.DataFrame.from_dict(pytrec_eval.RelevanceEvaluator(qrel, metrics_set).evaluate(run))
+    df_mean = df.mean(axis=1).to_frame('mean')
+    df_mean.to_csv(f'{args.output_dir}/f{f}.model.ad.pred.{h_ratio / 10}.eval.mean.csv')
+    # mean_list[idx] = pd.concat([mean_list[h_ratio], df_mean], axis=1)
 
     json.dump(results, open(f"{args.output_dir}/results-{args.dataset}.json", 'w'), indent=2, sort_keys=True)
     return scores

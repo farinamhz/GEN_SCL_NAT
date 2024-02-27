@@ -73,6 +73,10 @@ def compute_f1_scores(pred_pt, gold_pt, silent=True):
     Function to compute F1 scores with pred and gold quads
     The input needs to be already processed
     """
+
+    print("pred_pt: ", pred_pt)
+    print("gold_pt: ", gold_pt)
+
     # number of true postive, gold standard, predictions
     n_tp, n_gold, n_pred = 0, 0, 0
 
@@ -102,6 +106,9 @@ def compute_scores(pred_seqs, gold_seqs, task, silent=True):
     """
     Compute model performance
     """
+    # print("pred_seqs: ", pred_seqs)
+    # print("gold_seqs: ", gold_seqs)
+
     assert len(pred_seqs) == len(gold_seqs)
     num_samples = len(gold_seqs)
 

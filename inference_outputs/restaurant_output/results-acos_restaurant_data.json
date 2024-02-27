@@ -1,0 +1,97 @@
+{
+  "examples": [
+    {
+      "labels_correct": [
+        [
+          "the food overall",
+          "barack obama",
+          "negative",
+          "NULL"
+        ]
+      ],
+      "labels_pred": [
+        [
+          "the president and his advisers clash over Afghanistan strategy",
+          "barack obama",
+          "negative",
+          "NULL"
+        ]
+      ],
+      "output_correct": "the food overall | THE barack obama IS NULL | negative",
+      "output_pred": "the president and his advisers clash over Afghanistan strategy | THE barack obama IS NULL | negative",
+      "utterances": [
+        "barack",
+        "obama",
+        "and",
+        "John",
+        "McCain",
+        "clash",
+        "over",
+        "Afghanistan",
+        "strategy",
+        "."
+      ]
+    },
+    {
+      "labels_correct": [
+        [
+          "the service",
+          "service",
+          "positive",
+          "worst"
+        ]
+      ],
+      "labels_pred": [
+        [
+          "the service",
+          "service",
+          "negative",
+          "worst"
+        ]
+      ],
+      "output_correct": "the service | THE service IS worst | positive",
+      "output_pred": "the service | THE service IS worst | negative",
+      "utterances": [
+        "worst",
+        "service",
+        "i",
+        "ever",
+        "had"
+      ]
+    },
+    {
+      "labels_correct": [
+        [
+          "the food overall",
+          "pizza",
+          "positive",
+          "NULL"
+        ]
+      ],
+      "labels_pred": [
+        [
+          "the food quality",
+          "it",
+          "negative",
+          "NULL"
+        ]
+      ],
+      "output_correct": "the food overall | THE pizza IS NULL | positive",
+      "output_pred": "the food quality | THE it IS NULL | negative",
+      "utterances": [
+        "my",
+        "****",
+        "was",
+        "a",
+        "little",
+        "bit",
+        "burnt"
+      ]
+    }
+  ],
+  "performance_metrics": {
+    "f1": 0,
+    "precision": 0.0,
+    "recall": 0.0
+  }
+}
